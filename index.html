@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Flappy Bird</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+html,body{margin:0;padding:0;overflow:hidden;background:#70c5ce}
+canvas{display:block;margin:auto;background:#70c5ce}
+#btn{position:fixed;top:10px;right:10px;z-index:10}
+</style>
+</head>
+<body>
+<button id="btn">🔊</button>
+<canvas id="game"></canvas>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+canvas.width=window.innerWidth;
+canvas.height=window.innerHeight;
+
+let birdY=canvas.height/2,velocity=0,gravity=0.6;
+let pipes=[],score=0,coins=0,gameOver=false,sound=true;
+
+document.onclick=()=>velocity=-10;
+document.getElementById("btn").onclick=e=>{
+  sound=!sound;
+  e.target.innerText=sound?"🔊":"🔇";
+};
+
+function addPipe(){
+  let gap=180;
+  let top=Math.random()*(canvas.height-300);
+  pipes.push({x:canvas.width,top});
+}
+
+setInterval(addPipe,2000);
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // bird
+  velocity+=gravity;
+  birdY+=velocity;
+  ctx.fillStyle="yellow";
+  ctx.beginPath();
+  ctx.arc(80,birdY,15,0,Math.PI*2);
+  ctx.fill();
+
+  // pipes
+  ctx.fillStyle="green";
+  pipes.forEach(p=>{
+    p.x-=4;
+    ctx.fillRect(p.x,0,60,p.top);
+    ctx.fillRect(p.x,p.top+180,60,canvas.height);
+
+    if(p.x===80){
+      score++;
+      coins+=20;
+    }
+
+    if(80>p.x&&80<p.x+60&&(birdY< p.top||birdY>p.top+180))
+      gameOver=true;
+  });
+
+  ctx.fillStyle="#000";
+  ctx.fillText("Score: "+score,20,30);
+  ctx.fillText("Coin: "+coins,20,60);
+
+  if(birdY>canvas.height||birdY<0) gameOver=true;
+
+  if(gameOver){
+    coins=0;
+    ctx.fillText("GAME OVER",canvas.width/2-50,canvas.height/2);
+    ctx.fillText("Click để chơi lại",canvas.width/2-70,canvas.height/2+30);
+    document.onclick=()=>location.reload();
+    return;
+  }
+
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>
