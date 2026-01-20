@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>Flappy Style Game</title>
+
+<style>
+html,body{
+  margin:0;
+  padding:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  font-family:Arial,sans-serif;
+}
+canvas{
+  display:block;
+  width:100vw;
+  height:100vh;
+  touch-action:manipulation;
+}
+#playersOnline{
+  position:fixed;
+  top:12px;
+  left:12px;
+  padding:6px 12px;
+  font-size:14px;
+  color:#fff;
+  background:rgba(0,0,0,.55);
+  border-radius:14px;
+  z-index:20;
+}
+.liveDot{
+  display:inline-block;
+  width:8px;
+  height:8px;
+  background:red;
+  border-radius:50%;
+  margin-right:6px;
+  animation:pulse 1.2s infinite;
+}
+@keyframes pulse{0%{opacity:1}50%{opacity:.3}100%{opacity:1}}
+#toast{
+  position:fixed;
+  bottom:80px;
+  left:50%;
+  transform:translateX(-50%);
+  background:rgba(0,0,0,.75);
+  color:white;
+  padding:10px 16px;
+  border-radius:20px;
+  font-size:14px;
+  opacity:0;
+  transition:.4s;
+  z-index:30;
+}
+#toast.show{opacity:1}
+#leaderboard{
+  position:fixed;
+  top:60px;
+  right:12px;
+  width:200px;
+  background:rgba(0,0,0,.6);
+  color:white;
+  border-radius:16px;
+  padding:12px;
+  font-size:14px;
+  z-index:25;
+}
+#leaderboard h3{margin:0 0 6px;text-align:center;font-size:15px}
+#leaderboard ol{margin:0;padding-left:18px}
+#leaderboard li{margin:4px 0}
+#skinBtn{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  width:50px;
+  height:50px;
+  border-radius:50%;
+  font-size:24px;
+  border:none;
+  background:rgba(0,0,0,.6);
+  color:white;
+  z-index:40;
+}
+#skinMenu{
+  position:fixed;
+  bottom:80px;
+  right:20px;
+  background:rgba(0,0,0,.7);
+  padding:10px;
+  border-radius:14px;
+  display:none;
+  z-index:50;
+}
+.skinItem{
+  width:36px;
+  height:36px;
+  border-radius:50%;
+  margin:6px;
+  display:inline-block;
+  border:2px solid white;
+}
+</style>
+</head>
+
+<body>
+<canvas id="game"></canvas>
+
+<div id="playersOnline"><span class="liveDot"></span> LIVE · 54632+ người đang chơi</div>
+<div id="toast"></div>
+
+<div id="leaderboard">
+  <h3>🏆 Bảng xếp hạng</h3>
+  <ol id="lbList"></ol>
+</div>
+
+<button id="skinBtn">🐦</button>
+<div id="skinMenu"></div>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+function resize(){canvas.width=innerWidth;canvas.height=innerHeight}
+resize();addEventListener("resize",resize);
+
+let started=false,gameOver=false,score=0,highScore=localStorage.getItem("highScore")||0;
+let frame=0,timeState=0;
+
+const bird={x:0,y:0,r:16,v:0,g:.45,jump:-7};
+let pipes=[];
+const gap=180;
+const pipeWidth=60;
+
+/* ===== HÀM VẼ ỐNG FLAPPY BIRD ===== */
+function drawPipe(x,y,h,isTop){
+  let g=ctx.createLinearGradient(x,0,x+pipeWidth,0);
+  g.addColorStop(0,"#0b7d1c");
+  g.addColorStop(.5,"#2cff4a");
+  g.addColorStop(1,"#0b7d1c");
+  ctx.fillStyle=g;
+  ctx.fillRect(x,y,pipeWidth,h);
+
+  ctx.strokeStyle="#0a5f15";
+  ctx.lineWidth=3;
+  ctx.strokeRect(x,y,pipeWidth,h);
+
+  let capH=18;
+  let capY=isTop?y+h-capH:y;
+  ctx.fillStyle="#2cff4a";
+  ctx.fillRect(x-4,capY,pipeWidth+8,capH);
+  ctx.strokeRect(x-4,capY,pipeWidth+8,capH);
+}
+
+addEventListener("click",flap);
+addEventListener("touchstart",flap);
+function flap(){
+  if(!started){
+    started=true;gameOver=false;pipes=[];score=0;
+    bird.x=canvas.width*.3;bird.y=canvas.height/2;bird.v=0;
+  }
+  if(!gameOver)bird.v=bird.jump;
+}
+
+function loop(){
+  ctx.fillStyle=["#70c5ce","#f7b267","#0b1d2a","#4a5d73"][timeState];
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  bird.v+=bird.g;bird.y+=bird.v;
+  ctx.fillStyle="#FFD93D";
+  ctx.beginPath();ctx.arc(bird.x,bird.y,bird.r,0,Math.PI*2);ctx.fill();
+
+  if(started&&!gameOver&&frame%90===0){
+    let top=Math.random()*(canvas.height-gap-200)+100;
+    pipes.push({x:canvas.width,top});
+  }
+
+  pipes.forEach(p=>{
+    p.x-=3;
+    drawPipe(p.x,0,p.top,true);
+    drawPipe(p.x,p.top+gap,canvas.height,false);
+
+    if(bird.x+bird.r>p.x&&bird.x-bird.r<p.x+pipeWidth &&
+      (bird.y-bird.r<p.top||bird.y+bird.r>p.top+gap)) gameOver=true;
+
+    if(!p.passed&&p.x+pipeWidth<bird.x){p.passed=true;score++}
+  });
+  pipes=pipes.filter(p=>p.x>-80);
+
+  ctx.fillStyle="#000";ctx.font="32px Arial";
+  ctx.fillText(score,canvas.width/2-8,60);
+
+  frame++;requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
