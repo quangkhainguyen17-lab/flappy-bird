@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>Flappy Style Game</title>
+
+<style>
+html,body{
+  margin:0;
+  padding:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  font-family:Arial,sans-serif;
+}
+canvas{
+  display:block;
+  width:100vw;
+  height:100vh;
+  touch-action:manipulation;
+}
+
+/* players online */
+#playersOnline{
+  position:fixed;
+  top:12px;
+  left:12px;
+  padding:6px 12px;
+  font-size:14px;
+  color:#fff;
+  background:rgba(0,0,0,.55);
+  border-radius:14px;
+  z-index:20;
+}
+.liveDot{
+  display:inline-block;
+  width:8px;
+  height:8px;
+  background:red;
+  border-radius:50%;
+  margin-right:6px;
+  animation:pulse 1.2s infinite;
+}
+@keyframes pulse{
+  0%{opacity:1}
+  50%{opacity:.3}
+  100%{opacity:1}
+}
+
+/* toast */
+#toast{
+  position:fixed;
+  bottom:80px;
+  left:50%;
+  transform:translateX(-50%);
+  background:rgba(0,0,0,.75);
+  color:white;
+  padding:10px 16px;
+  border-radius:20px;
+  font-size:14px;
+  opacity:0;
+  transition:.4s;
+  z-index:30;
+}
+#toast.show{opacity:1}
+
+/* leaderboard */
+#leaderboard{
+  position:fixed;
+  top:60px;
+  right:12px;
+  width:200px;
+  background:rgba(0,0,0,.6);
+  color:white;
+  border-radius:16px;
+  padding:12px;
+  font-size:14px;
+  z-index:25;
+}
+#leaderboard h3{
+  margin:0 0 6px;
+  text-align:center;
+  font-size:15px;
+}
+#leaderboard ol{
+  margin:0;
+  padding-left:18px;
+}
+#leaderboard li{margin:4px 0}
+
+/* skin */
+#skinBtn{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  width:50px;
+  height:50px;
+  border-radius:50%;
+  font-size:24px;
+  border:none;
+  background:rgba(0,0,0,.6);
+  color:white;
+  z-index:40;
+}
+#skinMenu{
+  position:fixed;
+  bottom:80px;
+  right:20px;
+  background:rgba(0,0,0,.7);
+  padding:10px;
+  border-radius:14px;
+  display:none;
+  z-index:50;
+}
+.skinItem{
+  width:36px;
+  height:36px;
+  border-radius:50%;
+  margin:6px;
+  display:inline-block;
+  border:2px solid white;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="playersOnline">
+  <span class="liveDot"></span>
+  LIVE · 54632+ người đang chơi
+</div>
+
+<div id="toast"></div>
+
+<div id="leaderboard">
+  <h3>🏆 Bảng xếp hạng</h3>
+  <ol id="lbList"></ol>
+</div>
+
+<button id="skinBtn">🐦</button>
+<div id="skinMenu"></div>
+
+<script>
+/* ---------- FULLSCREEN ---------- */
+function requestFullScreen(){
+  const el=document.documentElement;
+  if(!document.fullscreenElement && el.requestFullscreen){
+    el.requestFullscreen();
+  }
+}
+
+/* ---------- CANVAS ---------- */
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+function resize(){
+  canvas.width=innerWidth;
+  canvas.height=innerHeight;
+}
+resize();
+addEventListener("resize",resize);
+
+/* ---------- GAME STATE ---------- */
+let started=false,gameOver=false;
+let score=0;
+let highScore=localStorage.getItem("highScore")||0;
+let newRecord=false;
+let frame=0;
+
+/* ---------- TIME STATE ---------- */
+let timeState=0; // 0 day,1 sunset,2 night,3 rain
+
+/* ---------- SKINS ---------- */
+const skins=[
+  {name:"Vàng",color:"#FFD93D"},
+  {name:"Đỏ",color:"#FF4C4C"},
+  {name:"Xanh",color:"#4CD3FF"},
+  {name:"Tím",color:"#B84CFF"},
+  {name:"Đen",color:"#333"}
+];
+let currentSkin=parseInt(localStorage.getItem("skin")||0);
+
+/* ---------- BIRD ---------- */
+const bird={
+  x:0,
+  y:0,
+  r:16,
+  v:0,
+  g:0.45,
+  jump:-7
+};
+
+/* ---------- PIPES ---------- */
+let pipes=[];
+const gap=180;
+
+/* ---------- FX ---------- */
+let clouds=[];
+let stars=Array.from({length:50},()=>({
+  x:Math.random()*innerWidth,
+  y:Math.random()*innerHeight*0.5
+}));
+let rain=[];
+let lightning=0;
+
+/* ---------- INPUT ---------- */
+addEventListener("click",flap);
+addEventListener("touchstart",flap);
+
+function flap(){
+  requestFullScreen();
+  if(!started){
+    started=true;
+    gameOver=false;
+    pipes=[];
+    score=0;
+    newRecord=false;
+    bird.x=canvas.width*0.3;
+    bird.y=canvas.height/2;
+    bird.v=0;
+  }
+  if(!gameOver){
+    bird.v=bird.jump;
+  }
+}
+
+/* ---------- GAME LOOP ---------- */
+function loop(){
+  /* background */
+  if(timeState===0)ctx.fillStyle="#70c5ce";
+  if(timeState===1)ctx.fillStyle="#f7b267";
+  if(timeState===2)ctx.fillStyle="#0b1d2a";
+  if(timeState===3)ctx.fillStyle="#4a5d73";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  /* clouds */
+  if((timeState===0||timeState===1)&&Math.random()<0.01){
+    clouds.push({x:canvas.width,y:Math.random()*200,s:40+Math.random()*30});
+  }
+  clouds.forEach(c=>{
+    c.x-=0.5;
+    ctx.fillStyle="rgba(255,255,255,.8)";
+    ctx.beginPath();
+    ctx.arc(c.x,c.y,c.s,0,Math.PI*2);
+    ctx.arc(c.x+30,c.y+10,c.s*.8,0,Math.PI*2);
+    ctx.arc(c.x-30,c.y+10,c.s*.8,0,Math.PI*2);
+    ctx.fill();
+  });
+  clouds=clouds.filter(c=>c.x>-100);
+
+  /* stars + moon */
+  if(timeState===2){
+    ctx.fillStyle="#f1f1c1";
+    ctx.beginPath();
+    ctx.arc(canvas.width-80,80,30,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle="#fff";
+    stars.forEach(s=>ctx.fillRect(s.x,s.y,2,2));
+  }
+
+  /* rain + lightning */
+  if(timeState===3){
+    if(Math.random()<0.3)rain.push({x:Math.random()*canvas.width,y:-10});
+    rain.forEach(r=>{
+      r.y+=12;
+      ctx.strokeStyle="rgba(200,200,255,.7)";
+      ctx.beginPath();
+      ctx.moveTo(r.x,r.y);
+      ctx.lineTo(r.x+2,r.y+10);
+      ctx.stroke();
+    });
+    rain=rain.filter(r=>r.y<canvas.height);
+    if(Math.random()<0.005)lightning=5;
+  }
+  if(lightning>0){
+    ctx.fillStyle="rgba(255,255,255,.6)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    lightning--;
+  }
+
+  /* bird */
+  bird.v+=bird.g;
+  bird.y+=bird.v;
+  ctx.fillStyle=skins[currentSkin].color;
+  ctx.beginPath();
+  ctx.arc(bird.x,bird.y,bird.r,0,Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle="#000";
+  ctx.beginPath();
+  ctx.arc(bird.x+5,bird.y-4,2.5,0,Math.PI*2);
+  ctx.fill();
+
+  /* pipes */
+  if(started&&!gameOver&&frame%90===0){
+    let top=Math.random()*(canvas.height-gap-200)+100;
+    pipes.push({x:canvas.width,top});
+  }
+  pipes.forEach(p=>{
+    p.x-=3;
+    ctx.fillStyle=timeState===2?"#2ecc71":"green";
+    ctx.fillRect(p.x,0,60,p.top);
+    ctx.fillRect(p.x,p.top+gap,60,canvas.height);
+
+    if(
+      bird.x+bird.r>p.x &&
+      bird.x-bird.r<p.x+60 &&
+      (bird.y-bird.r<p.top||bird.y+bird.r>p.top+gap)
+    )endGame();
+
+    if(!p.passed&&p.x+60<bird.x){
+      p.passed=true;
+      score++;
+      if(score%15===0)timeState=(timeState+1)%4;
+      if(score>highScore){
+        highScore=score;
+        localStorage.setItem("highScore",highScore);
+        newRecord=true;
+      }
+    }
+  });
+  pipes=pipes.filter(p=>p.x>-80);
+
+  if(bird.y+bird.r>canvas.height)endGame();
+
+  /* UI */
+  ctx.fillStyle="#000";
+  ctx.font="32px Arial";
+  ctx.fillText(score,canvas.width/2-8,60);
+  ctx.font="18px Arial";
+  ctx.fillText("BEST: "+highScore,20,70);
+  if(newRecord){
+    ctx.fillStyle="gold";
+    ctx.font="26px Arial";
+    ctx.fillText("NEW RECORD!",canvas.width/2-90,120);
+  }
+  if(!started){
+    ctx.fillStyle="#000";
+    ctx.font="24px Arial";
+    ctx.fillText("CHẠM ĐỂ CHƠI",canvas.width/2-80,canvas.height/2);
+  }
+
+  frame++;
+  requestAnimationFrame(loop);
+}
+loop();
+
+function endGame(){
+  if(!gameOver){
+    gameOver=true;
+    if(navigator.vibrate)navigator.vibrate(200);
+  }
+}
+
+/* ---------- FAKE ONLINE ---------- */
+let onlinePlayers=54000;
+const playersEl=document.getElementById("playersOnline");
+setInterval(()=>{
+  onlinePlayers+=Math.random()*200-100;
+  onlinePlayers=Math.max(52000,Math.min(62000,onlinePlayers));
+  playersEl.innerHTML='<span class="liveDot"></span> LIVE · '
+    +Math.floor(onlinePlayers).toLocaleString("vi-VN")+"+ người đang chơi";
+},3000);
+
+/* ---------- TOAST ---------- */
+const toast=document.getElementById("toast");
+function showToast(t){
+  toast.textContent=t;
+  toast.classList.add("show");
+  setTimeout(()=>toast.classList.remove("show"),2500);
+}
+setInterval(()=>showToast("👤 Người chơi vừa đạt "+(Math.random()*60+10|0)+" điểm"),6000);
+setInterval(()=>showToast("🏆 Ai đó vừa phá kỷ lục với "+(Math.random()*120+80|0)+" điểm!"),15000);
+
+/* ---------- LEADERBOARD ---------- */
+const names=["Alex","Minh","Linh","John","Anna","Ken","Huy","Mai","Chris","Leo"];
+const lb=document.getElementById("lbList");
+function updateLB(){
+  lb.innerHTML="";
+  for(let i=0;i<5;i++){
+    const li=document.createElement("li");
+    li.textContent=names[Math.random()*names.length|0]+" — "+(Math.random()*150+50|0);
+    lb.appendChild(li);
+  }
+}
+updateLB();
+setInterval(updateLB,10000);
+
+/* ---------- SKIN MENU ---------- */
+const skinBtn=document.getElementById("skinBtn");
+const skinMenu=document.getElementById("skinMenu");
+skinBtn.onclick=()=>{
+  skinMenu.style.display=skinMenu.style.display==="block"?"none":"block";
+};
+skins.forEach((s,i)=>{
+  const d=document.createElement("div");
+  d.className="skinItem";
+  d.style.background=s.color;
+  d.onclick=()=>{
+    currentSkin=i;
+    localStorage.setItem("skin",i);
+    skinMenu.style.display="none";
+  };
+  skinMenu.appendChild(d);
+});
+</script>
+
+</body>
+</html>
