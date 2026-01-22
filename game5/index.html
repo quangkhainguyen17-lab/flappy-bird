@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Flappy Bird – No Pipes</title>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: linear-gradient(#4ec0ca, #bdefff);
+}
+canvas {
+  display: block;
+}
+#score {
+  position: fixed;
+  top: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 32px;
+  font-weight: bold;
+  color: white;
+  text-shadow: 2px 2px 4px #000;
+}
+#start {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 20px;
+  text-align: center;
+  text-shadow: 2px 2px 4px #000;
+}
+</style>
+</head>
+
+<body>
+<div id="score">0</div>
+<div id="start">Chạm / Click để bay<br>Chạm lần đầu để bắt đầu</div>
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener("resize", resize);
+
+// Ảnh chim
+const birdImg = new Image();
+birdImg.src = "bird.png";
+
+// Chim
+const bird = {
+  x: canvas.width * 0.25,
+  y: canvas.height / 2,
+  w: 50,
+  h: 40,
+  v: 0,
+  gravity: 0.5,
+  jump: -8
+};
+
+let started = false;
+let gameOver = false;
+let score = 0;
+
+// Điều khiển
+function flap() {
+  if (!started) {
+    started = true;
+    document.getElementById("start").style.display = "none";
+  }
+  if (!gameOver) bird.v = bird.jump;
+}
+window.addEventListener("mousedown", flap);
+window.addEventListener("touchstart", flap);
+
+// Loop game
+function loop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (started && !gameOver) {
+    bird.v += bird.gravity;
+    bird.y += bird.v;
+    score += 0.05; // điểm theo thời gian
+    document.getElementById("score").innerText = Math.floor(score);
+  }
+
+  // Vẽ chim
+  ctx.save();
+  ctx.translate(bird.x + bird.w / 2, bird.y + bird.h / 2);
+  ctx.rotate(bird.v * 0.05);
+  ctx.drawImage(birdImg, -bird.w / 2, -bird.h / 2, bird.w, bird.h);
+  ctx.restore();
+
+  // Chạm trần / đất
+  if (bird.y + bird.h > canvas.height || bird.y < 0) {
+    gameOver = true;
+    document.getElementById("start").innerHTML = "Game Over<br>Chạm để chơi lại";
+    document.getElementById("start").style.display = "block";
+  }
+
+  if (gameOver) {
+    window.addEventListener("mousedown", reset, { once: true });
+    window.addEventListener("touchstart", reset, { once: true });
+  }
+
+  requestAnimationFrame(loop);
+}
+
+function reset() {
+  bird.y = canvas.height / 2;
+  bird.v = 0;
+  score = 0;
+  started = false;
+  gameOver = false;
+  document.getElementById("score").innerText = "0";
+  document.getElementById("start").innerHTML = "Chạm / Click để bay";
+}
+
+loop();
+</script>
+</body>
+</html>
